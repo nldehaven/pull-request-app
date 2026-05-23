@@ -1,6 +1,6 @@
 # Pull Request
 
-Version: 0.1.5
+Version: 0.1.6
 
 A mobile-first workout logging web app for people using ChatGPT as an adaptive workout coach.
 
@@ -48,3 +48,9 @@ After uploading the files to GitHub:
 6. Open the Pages URL.
 7. On iPhone Safari, use Share > Add to Home Screen.
 
+
+
+## Deployment note
+
+This package intentionally does not include `package-lock.json`.
+The previous v0.1.5 package included a lockfile generated in a sandboxed internal registry environment, which can cause GitHub Actions dependency installs to hang or fail. Let GitHub Actions install from the public npm registry during deployment.
