@@ -3,8 +3,10 @@ import React, { useEffect, useMemo, useState } from "react";
 const STORAGE_KEYS = {
   profile: "pullRequest.profile.v012",
   workouts: "pullRequest.workouts.v012",
-  lastCheckin: "pullRequest.lastCheckin.v014",
+  lastCheckin: "pullRequest.lastCheckin.v015",
 };
+
+const LEGACY_CHECKIN_KEYS = ["pullRequest.lastCheckin.v014", "pullRequest.lastCheckin.v013"];
 
 const defaultProfile = {
   name: "",
@@ -31,6 +33,14 @@ const defaultCheckin = {
   constraints: "",
   notes: "",
 };
+
+const defaultFeedback = {
+  effort: "",
+  tomorrow: "",
+  note: "",
+};
+
+const coachModeOptions = ["Just the facts", "Coach me hard", "Be gentle today", "Help me progress"];
 
 const sampleWorkoutText = `WORKOUT_TITLE: Lower Body - Glutes + Hamstrings
 TIME_TARGET: 45 minutes
@@ -88,6 +98,14 @@ function loadJson(key, fallback) {
   }
 }
 
+function loadFirstJson(keys, fallback) {
+  for (const key of keys) {
+    const value = loadJson(key, null);
+    if (value) return value;
+  }
+  return fallback;
+}
+
 function saveJson(key, value) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
@@ -101,10 +119,15 @@ function classNames(...items) {
   return items.filter(Boolean).join(" ");
 }
 
-function Field({ label, value, onChange, placeholder, type = "text", textarea = false }) {
+function hasProfileStarted(profile) {
+  return Boolean(profile?.name || profile?.age || profile?.activityLevel || profile?.gymAccess || profile?.limitations || profile?.favorites || profile?.avoid);
+}
+
+function Field({ label, value, onChange, placeholder, type = "text", textarea = false, helper = "" }) {
   return (
     <label className="block">
       <span className="mb-2 block text-sm font-medium text-zinc-300">{label}</span>
+      {helper && <span className="mb-2 block text-xs leading-5 text-zinc-500">{helper}</span>}
       {textarea ? (
         <textarea
           value={value}
@@ -182,7 +205,7 @@ function CopyButton({ text, label = "Copy", copiedLabel = "Copied", fallbackTitl
         return;
       }
     } catch {
-      // Keep going. Some preview environments block this even though deployed HTTPS apps allow it.
+      // Some preview/browser contexts block this. Try the older copy method next.
     }
 
     const fallbackWorked = legacyCopyToClipboard(text);
@@ -272,6 +295,7 @@ function parseWorkout(text) {
     rawText: text,
     sections: [],
     completed: false,
+    feedback: defaultFeedback,
   };
 
   let currentSection = null;
@@ -367,8 +391,36 @@ function updateExercise(workout, exerciseId, updater) {
   };
 }
 
+function updateWorkoutFeedback(workout, feedback) {
+  if (!workout) return workout;
+  return { ...workout, feedback: { ...(workout.feedback || defaultFeedback), ...feedback } };
+}
+
 function workoutExerciseCount(workout) {
   return workout.sections.reduce((count, section) => count + section.exercises.length, 0);
+}
+
+function workoutSetStats(workout) {
+  if (!workout) return { totalSets: 0, confirmedSets: 0, editedSets: 0, plannedSets: 0, painFlags: 0 };
+  let totalSets = 0;
+  let confirmedSets = 0;
+  let editedSets = 0;
+  let plannedSets = 0;
+  let painFlags = 0;
+
+  workout.sections.forEach((section) => {
+    section.exercises.forEach((exercise) => {
+      if (exercise.pain) painFlags += 1;
+      exercise.actualSets.forEach((set) => {
+        totalSets += 1;
+        if (set.status === "confirmed") confirmedSets += 1;
+        else if (set.status === "edited") editedSets += 1;
+        else plannedSets += 1;
+      });
+    });
+  });
+
+  return { totalSets, confirmedSets, editedSets, plannedSets, painFlags };
 }
 
 function profilePrompt(profile, mode = "starter") {
@@ -384,14 +436,14 @@ function checkinPrompt(profile, checkin) {
 }
 
 function describeSetStatus(set) {
-  if (set.status === "confirmed" && set.edited) return "done after edit";
-  if (set.status === "confirmed") return "done as planned/current";
-  if (set.status === "edited") return "edited but not yet marked done";
+  if (set.status === "confirmed") return "confirmed as completed";
+  if (set.status === "edited") return "edited but not explicitly confirmed";
   return "planned value not yet confirmed";
 }
 
-function coachUpdate(workout, checkin) {
+function coachUpdate(workout, checkin, coachMode = "Help me progress") {
   if (!workout) return "";
+  const feedback = workout.feedback || defaultFeedback;
   const sections = workout.sections
     .map((section) => {
       const exercises = section.exercises
@@ -406,7 +458,7 @@ function coachUpdate(workout, checkin) {
     })
     .join("\n\n");
 
-  return `WORKOUT COMPLETED\n\nWorkout: ${workout.title}\nDate: ${new Date(workout.date).toLocaleDateString()}\nTime target: ${workout.timeTarget || "not listed"}\n\nToday's context:\nWeight: ${checkin.weight || "not entered"}\nSleep: ${checkin.sleep || "not entered"}\nEnergy: ${checkin.energy || "not entered"}\nSoreness/pain: ${checkin.soreness || "not entered"}\nConstraints: ${checkin.constraints || "none entered"}\nNotes: ${checkin.notes || "none entered"}\n\nExercise results:\n\n${sections}\n\nProgression request:\nPlease use these actuals to decide what should increase, stay the same, or be modified next time. Treat done-as-planned/current sets as completed, and treat done-after-edit sets as the true actuals. If a set is still marked as planned value not yet confirmed or edited but not yet marked done, ask me for clarification or use caution before progressing that exercise. Keep the workout flexible and adjust for any pain flags or constraints.`;
+  return `WORKOUT COMPLETED\n\nWorkout: ${workout.title}\nDate: ${new Date(workout.date).toLocaleDateString()}\nTime target: ${workout.timeTarget || "not listed"}\n\nToday's context:\nWeight: ${checkin.weight || "not entered"}\nSleep: ${checkin.sleep || "not entered"}\nEnergy: ${checkin.energy || "not entered"}\nSoreness/pain: ${checkin.soreness || "not entered"}\nConstraints: ${checkin.constraints || "none entered"}\nNotes: ${checkin.notes || "none entered"}\n\nOverall workout feedback:\nEffort: ${feedback.effort || "not entered"}\nTomorrow should be: ${feedback.tomorrow || "not entered"}\nExtra note for coach: ${feedback.note || "none"}\nCoaching preference for next response: ${coachMode}\n\nExercise results:\n\n${sections}\n\nProgression request:\nPlease use these actuals to decide what should increase, stay the same, or be modified next time. Treat confirmed-as-completed sets as done exactly as shown. Treat edited-but-not-confirmed sets as likely actuals but use caution if anything seems ambiguous. If a set is still marked as planned value not yet confirmed, ask me for clarification or use caution before progressing that exercise. Keep the workout flexible and adjust for any pain flags, fatigue notes, or constraints.`;
 }
 
 function Header({ activeTab, setActiveTab }) {
@@ -424,20 +476,20 @@ function Header({ activeTab, setActiveTab }) {
     >
       <div className="mx-auto max-w-5xl px-3 py-3 sm:px-4 sm:py-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-fuchsia-400 via-violet-400 to-cyan-300 text-lg font-black text-zinc-950 shadow-lg shadow-fuchsia-500/20 sm:h-10 sm:w-10 sm:text-xl">
               PR
             </div>
-            <div>
-              <h1 className="text-lg font-black tracking-tight text-white sm:text-xl">Pull Request Fitness App</h1>
-              <p className="text-[11px] font-medium text-zinc-400 sm:text-xs">Plan. Lift. Log. Merge progress.</p>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-black tracking-tight text-white sm:text-xl">Pull Request Fitness App</h1>
+              <p className="truncate text-[11px] font-medium text-zinc-400 sm:text-xs">Plan. Lift. Log. Merge progress.</p>
             </div>
           </div>
           <button
             type="button"
             onClick={() => setActiveTab("profile")}
             className={classNames(
-              "rounded-full px-4 py-2 text-sm font-black transition active:scale-[0.98]",
+              "shrink-0 rounded-full px-4 py-2 text-sm font-black transition active:scale-[0.98]",
               activeTab === "profile"
                 ? "bg-white text-zinc-950"
                 : "border border-white/10 bg-white/[0.06] text-zinc-200 hover:bg-white/[0.1]"
@@ -483,6 +535,14 @@ function Card({ children, className = "" }) {
 }
 
 function Home({ profile, checkin, setCheckin, setActiveTab, currentWorkout }) {
+  function resetToday() {
+    setCheckin({
+      ...defaultCheckin,
+      weight: checkin.weight || defaultCheckin.weight,
+      timeAvailable: checkin.timeAvailable || profile.sessionLength || defaultCheckin.timeAvailable,
+    });
+  }
+
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
       <Card className="relative overflow-hidden">
@@ -516,10 +576,15 @@ function Home({ profile, checkin, setCheckin, setActiveTab, currentWorkout }) {
             <h3 className="text-xl font-black text-white">Daily check-in</h3>
             <p className="mt-1 text-sm leading-6 text-zinc-400">Use this after setup. It gives your ChatGPT coach today's quick body report so it can build the right workout.</p>
           </div>
-          <CopyButton text={checkinPrompt(profile, checkin)} label="Copy prompt" copiedLabel="Copied" fallbackTitle="Copy your daily workout prompt" />
+          <div className="flex flex-wrap gap-2">
+            <button onClick={resetToday} className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-black text-zinc-200 transition hover:bg-white/[0.09] active:scale-[0.98]">
+              Reset today
+            </button>
+            <CopyButton text={checkinPrompt(profile, checkin)} label="Copy prompt" copiedLabel="Copied" fallbackTitle="Copy your daily workout prompt" />
+          </div>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <Field label="Weight today" value={checkin.weight} onChange={(v) => setCheckin({ ...checkin, weight: v })} placeholder="150" />
+          <Field label="Weight today" helper="Pre-filled from your last check-in. Change it if needed." value={checkin.weight} onChange={(v) => setCheckin({ ...checkin, weight: v })} placeholder="150" />
           <Field label="Available time" value={checkin.timeAvailable} onChange={(v) => setCheckin({ ...checkin, timeAvailable: v })} placeholder="45 minutes" />
           <div>
             <span className="mb-2 block text-sm font-medium text-zinc-300">Sleep</span>
@@ -557,7 +622,7 @@ function Home({ profile, checkin, setCheckin, setActiveTab, currentWorkout }) {
             />
           </div>
           <div className="sm:col-span-2">
-            <Field label="Today's constraints" value={checkin.constraints} onChange={(v) => setCheckin({ ...checkin, constraints: v })} placeholder="No Smith machine today, short on time, lower body only..." textarea />
+            <Field label="Today's constraints" value={checkin.constraints} onChange={(v) => setCheckin({ ...checkin, constraints: v })} placeholder="Short on time, avoid certain equipment, lower body only..." textarea />
           </div>
           <div className="sm:col-span-2">
             <Field label="Other notes" value={checkin.notes} onChange={(v) => setCheckin({ ...checkin, notes: v })} placeholder="Anything your coach should know today? Time crunch, mood, equipment preference, workout style..." textarea />
@@ -775,14 +840,14 @@ function SetStatusBadge({ status }) {
 
 function ExerciseCard({ exercise, onChange }) {
   function updateSet(index, field, value) {
-    const actualSets = exercise.actualSets.map((set, i) => i === index ? { ...set, [field]: value, status: "edited", edited: true } : set);
+    const actualSets = exercise.actualSets.map((set, i) => i === index ? { ...set, [field]: value, status: "edited" } : set);
     onChange({ ...exercise, actualSets });
   }
 
   function confirmSet(index) {
     const actualSets = exercise.actualSets.map((set, i) =>
       i === index
-        ? { ...set, status: "confirmed", edited: set.edited || set.status === "edited" }
+        ? { ...set, status: "confirmed" }
         : set
     );
     onChange({ ...exercise, actualSets });
@@ -792,20 +857,8 @@ function ExerciseCard({ exercise, onChange }) {
     const allConfirmedNow = exercise.actualSets.every((set) => set.status === "confirmed");
     const actualSets = exercise.actualSets.map((set) =>
       allConfirmedNow
-        ? {
-            ...set,
-            weight: set.plannedWeight || set.weight,
-            reps: set.plannedReps || set.reps,
-            status: "planned",
-            edited: false,
-          }
-        : {
-            ...set,
-            weight: set.plannedWeight || set.weight,
-            reps: repsForConfirmedSet(set.plannedReps || set.reps),
-            status: "confirmed",
-            edited: false,
-          }
+        ? { ...set, weight: set.plannedWeight || set.weight, reps: set.plannedReps || set.reps, status: "planned" }
+        : { ...set, reps: repsForConfirmedSet(set.plannedReps || set.reps), status: "confirmed" }
     );
     onChange({ ...exercise, actualSets, difficulty: allConfirmedNow ? exercise.difficulty : exercise.difficulty || "Just right" });
   }
@@ -813,7 +866,7 @@ function ExerciseCard({ exercise, onChange }) {
   function sameAsPrevious(index) {
     if (index <= 0) return;
     const prev = exercise.actualSets[index - 1];
-    const actualSets = exercise.actualSets.map((set, i) => i === index ? { ...set, weight: prev.weight, reps: prev.reps, status: "edited", edited: true } : set);
+    const actualSets = exercise.actualSets.map((set, i) => i === index ? { ...set, weight: prev.weight, reps: prev.reps, status: "edited" } : set);
     onChange({ ...exercise, actualSets });
   }
 
@@ -886,6 +939,42 @@ function ExerciseCard({ exercise, onChange }) {
   );
 }
 
+function WorkoutFeedback({ workout, setCurrentWorkout }) {
+  if (!workout) return null;
+  const feedback = workout.feedback || defaultFeedback;
+
+  function updateFeedback(update) {
+    setCurrentWorkout(updateWorkoutFeedback(workout, update));
+  }
+
+  return (
+    <Card>
+      <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-cyan-300">Before you finish</p>
+      <h3 className="text-2xl font-black text-white">Tell your coach how the workout felt.</h3>
+      <p className="mt-2 text-sm leading-6 text-zinc-400">This gives your next ChatGPT response better context than reps alone.</p>
+      <div className="mt-5 space-y-5">
+        <div>
+          <span className="mb-3 block text-sm font-medium text-zinc-300">Overall effort</span>
+          <div className="flex flex-wrap gap-2">
+            {["Easy", "Solid", "Hard", "Brutal"].map((option) => (
+              <PillButton key={option} active={feedback.effort === option} onClick={() => updateFeedback({ effort: option })}>{option}</PillButton>
+            ))}
+          </div>
+        </div>
+        <div>
+          <span className="mb-3 block text-sm font-medium text-zinc-300">Tomorrow should be</span>
+          <div className="flex flex-wrap gap-2">
+            {["Push harder", "Normal", "Take it easy"].map((option) => (
+              <PillButton key={option} active={feedback.tomorrow === option} onClick={() => updateFeedback({ tomorrow: option })}>{option}</PillButton>
+            ))}
+          </div>
+        </div>
+        <Field label="Anything to tell your coach?" value={feedback.note} onChange={(v) => updateFeedback({ note: v })} placeholder="Mood, soreness, confidence, anything you want tomorrow's plan to account for..." textarea />
+      </div>
+    </Card>
+  );
+}
+
 function LogWorkout({ currentWorkout, setCurrentWorkout, setActiveTab, saveWorkoutToHistory }) {
   if (!currentWorkout) {
     return (
@@ -901,6 +990,10 @@ function LogWorkout({ currentWorkout, setCurrentWorkout, setActiveTab, saveWorko
   function handleExerciseChange(exercise) {
     setCurrentWorkout(updateExercise(currentWorkout, exercise.id, () => exercise));
   }
+  function finishWorkout() {
+    saveWorkoutToHistory({ ...currentWorkout, completed: true, completedDate: new Date().toISOString() });
+    setActiveTab("complete");
+  }
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
       <Card>
@@ -911,7 +1004,7 @@ function LogWorkout({ currentWorkout, setCurrentWorkout, setActiveTab, saveWorko
             <p className="mt-2 text-zinc-400">{currentWorkout.timeTarget || "No time target listed"} - {workoutExerciseCount(currentWorkout)} exercises</p>
             <p className="mt-2 text-sm leading-6 text-zinc-500">Values are prefilled from the plan. Confirm what you did exactly, or edit what changed.</p>
           </div>
-          <button onClick={() => { saveWorkoutToHistory({ ...currentWorkout, completed: true, completedDate: new Date().toISOString() }); setActiveTab("export"); }} className="rounded-2xl bg-fuchsia-400 px-5 py-4 text-sm font-black text-zinc-950 shadow-lg shadow-fuchsia-500/20 transition hover:bg-fuchsia-300 active:scale-[0.98]">
+          <button onClick={finishWorkout} className="rounded-2xl bg-fuchsia-400 px-5 py-4 text-sm font-black text-zinc-950 shadow-lg shadow-fuchsia-500/20 transition hover:bg-fuchsia-300 active:scale-[0.98]">
             Finish workout
           </button>
         </div>
@@ -933,12 +1026,90 @@ function LogWorkout({ currentWorkout, setCurrentWorkout, setActiveTab, saveWorko
           </Card>
         );
       })}
+      <WorkoutFeedback workout={currentWorkout} setCurrentWorkout={setCurrentWorkout} />
+      <Card>
+        <button onClick={finishWorkout} className="w-full rounded-2xl bg-fuchsia-400 px-5 py-4 text-sm font-black text-zinc-950 shadow-lg shadow-fuchsia-500/20 transition hover:bg-fuchsia-300 active:scale-[0.98]">
+          Finish workout and review summary
+        </button>
+      </Card>
     </main>
   );
 }
 
-function ExportUpdate({ currentWorkout, checkin }) {
-  const update = useMemo(() => coachUpdate(currentWorkout, checkin), [currentWorkout, checkin]);
+function CoachModePicker({ coachMode, setCoachMode }) {
+  return (
+    <div>
+      <span className="mb-3 block text-sm font-medium text-zinc-300">How should ChatGPT respond next?</span>
+      <div className="flex flex-wrap gap-2">
+        {coachModeOptions.map((option) => (
+          <PillButton key={option} active={coachMode === option} onClick={() => setCoachMode(option)}>{option}</PillButton>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompleteWorkout({ currentWorkout, checkin, coachMode, setCoachMode, setActiveTab }) {
+  const update = useMemo(() => coachUpdate(currentWorkout, checkin, coachMode), [currentWorkout, checkin, coachMode]);
+  if (!currentWorkout) {
+    return (
+      <main className="mx-auto max-w-5xl px-3 py-5 sm:px-4 sm:py-6">
+        <Card>
+          <h2 className="text-3xl font-black text-white">No completed workout yet.</h2>
+          <button onClick={() => setActiveTab("home")} className="mt-5 rounded-2xl bg-cyan-300 px-5 py-4 text-sm font-black text-zinc-950">Go to Today</button>
+        </Card>
+      </main>
+    );
+  }
+  const stats = workoutSetStats(currentWorkout);
+  return (
+    <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
+      <Card className="relative overflow-hidden">
+        <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-emerald-300/20 blur-3xl" />
+        <div className="relative">
+          <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-emerald-300">Workout complete</p>
+          <h2 className="text-3xl font-black text-white sm:text-4xl">Workout merged. Nice work.</h2>
+          <p className="mt-2 text-zinc-400">Now copy the coach update back to ChatGPT so the next workout can progress from what actually happened.</p>
+        </div>
+      </Card>
+      <Card>
+        <div className="grid gap-3 sm:grid-cols-5">
+          <div className="rounded-3xl bg-white/[0.05] p-4">
+            <p className="text-2xl font-black text-white">{workoutExerciseCount(currentWorkout)}</p>
+            <p className="text-sm text-zinc-400">exercises</p>
+          </div>
+          <div className="rounded-3xl bg-white/[0.05] p-4">
+            <p className="text-2xl font-black text-white">{stats.totalSets}</p>
+            <p className="text-sm text-zinc-400">sets</p>
+          </div>
+          <div className="rounded-3xl bg-emerald-300/[0.08] p-4">
+            <p className="text-2xl font-black text-emerald-200">{stats.confirmedSets}</p>
+            <p className="text-sm text-zinc-400">confirmed</p>
+          </div>
+          <div className="rounded-3xl bg-cyan-300/[0.08] p-4">
+            <p className="text-2xl font-black text-cyan-200">{stats.editedSets}</p>
+            <p className="text-sm text-zinc-400">edited</p>
+          </div>
+          <div className="rounded-3xl bg-rose-300/[0.08] p-4">
+            <p className="text-2xl font-black text-rose-200">{stats.painFlags}</p>
+            <p className="text-sm text-zinc-400">pain flags</p>
+          </div>
+        </div>
+      </Card>
+      <Card>
+        <CoachModePicker coachMode={coachMode} setCoachMode={setCoachMode} />
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <CopyButton text={update} label="Copy coach update" copiedLabel="Copied" fallbackTitle="Copy your completed workout update" />
+          <button onClick={() => setActiveTab("export")} className="rounded-2xl border border-white/10 bg-white/[0.05] px-5 py-3 text-sm font-black text-zinc-200 transition hover:bg-white/[0.09] active:scale-[0.98]">Review full export</button>
+          <button onClick={() => setActiveTab("home")} className="rounded-2xl border border-white/10 bg-white/[0.05] px-5 py-3 text-sm font-black text-zinc-200 transition hover:bg-white/[0.09] active:scale-[0.98]">Back to Today</button>
+        </div>
+      </Card>
+    </main>
+  );
+}
+
+function ExportUpdate({ currentWorkout, checkin, coachMode, setCoachMode }) {
+  const update = useMemo(() => coachUpdate(currentWorkout, checkin, coachMode), [currentWorkout, checkin, coachMode]);
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
       <Card>
@@ -951,6 +1122,11 @@ function ExportUpdate({ currentWorkout, checkin }) {
           {currentWorkout && <CopyButton text={update} label="Copy update" copiedLabel="Merged" fallbackTitle="Copy your completed workout update" />}
         </div>
       </Card>
+      {currentWorkout && (
+        <Card>
+          <CoachModePicker coachMode={coachMode} setCoachMode={setCoachMode} />
+        </Card>
+      )}
       <Card>
         {currentWorkout ? (
           <textarea readOnly value={update} rows={24} className="min-h-[520px] w-full rounded-[1.5rem] border border-white/10 bg-zinc-950/75 p-4 font-mono text-sm leading-6 text-zinc-100 outline-none" />
@@ -968,7 +1144,7 @@ function History({ workouts, setCurrentWorkout, setActiveTab }) {
       <Card>
         <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-fuchsia-300">Local history</p>
         <h2 className="text-3xl font-black text-white">Your recent merges.</h2>
-        <p className="mt-2 text-zinc-400">Saved in this browser for now. Later, this can become account sync, trends, and AI-ready training history.</p>
+        <p className="mt-2 text-zinc-400">Saved in this browser for now. Your ChatGPT conversation is still the real coaching history.</p>
       </Card>
       <div className="space-y-3">
         {workouts.length === 0 ? (
@@ -992,12 +1168,13 @@ function History({ workouts, setCurrentWorkout, setActiveTab }) {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("profile");
   const [profile, setProfile] = useState(() => loadJson(STORAGE_KEYS.profile, defaultProfile));
-  const [checkin, setCheckin] = useState(() => loadJson(STORAGE_KEYS.lastCheckin, defaultCheckin));
+  const [activeTab, setActiveTab] = useState(() => hasProfileStarted(loadJson(STORAGE_KEYS.profile, defaultProfile)) ? "home" : "profile");
+  const [checkin, setCheckin] = useState(() => loadFirstJson([STORAGE_KEYS.lastCheckin, ...LEGACY_CHECKIN_KEYS], defaultCheckin));
   const [importText, setImportText] = useState(sampleWorkoutText);
   const [currentWorkout, setCurrentWorkout] = useState(null);
   const [workouts, setWorkouts] = useState(() => loadJson(STORAGE_KEYS.workouts, []));
+  const [coachMode, setCoachMode] = useState("Help me progress");
 
   useEffect(() => saveJson(STORAGE_KEYS.profile, profile), [profile]);
   useEffect(() => saveJson(STORAGE_KEYS.workouts, workouts), [workouts]);
@@ -1015,7 +1192,8 @@ export default function App() {
       {activeTab === "profile" && <Profile profile={profile} setProfile={setProfile} />}
       {activeTab === "import" && <ImportWorkout importText={importText} setImportText={setImportText} setCurrentWorkout={setCurrentWorkout} setActiveTab={setActiveTab} />}
       {activeTab === "log" && <LogWorkout currentWorkout={currentWorkout} setCurrentWorkout={setCurrentWorkout} setActiveTab={setActiveTab} saveWorkoutToHistory={saveWorkoutToHistory} />}
-      {activeTab === "export" && <ExportUpdate currentWorkout={currentWorkout} checkin={checkin} />}
+      {activeTab === "complete" && <CompleteWorkout currentWorkout={currentWorkout} checkin={checkin} coachMode={coachMode} setCoachMode={setCoachMode} setActiveTab={setActiveTab} />}
+      {activeTab === "export" && <ExportUpdate currentWorkout={currentWorkout} checkin={checkin} coachMode={coachMode} setCoachMode={setCoachMode} />}
       {activeTab === "history" && <History workouts={workouts} setCurrentWorkout={setCurrentWorkout} setActiveTab={setActiveTab} />}
     </Shell>
   );

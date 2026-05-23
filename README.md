@@ -1,6 +1,6 @@
 # Pull Request
 
-Version: 0.1.4
+Version: 0.1.5
 
 A mobile-first workout logging web app for people using ChatGPT as an adaptive workout coach.
 
