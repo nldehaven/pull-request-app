@@ -417,29 +417,32 @@ function Header({ activeTab, setActiveTab }) {
     ["history", "History"],
   ];
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-zinc-950/85 backdrop-blur-xl">
-      <div className="mx-auto max-w-5xl px-4 py-4">
+    <header
+      className="sticky top-0 z-40 border-b border-white/10 bg-zinc-950/90 backdrop-blur-xl"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
+      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-4 sm:py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-fuchsia-400 via-violet-400 to-cyan-300 text-xl font-black text-zinc-950 shadow-lg shadow-fuchsia-500/20">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-fuchsia-400 via-violet-400 to-cyan-300 text-lg font-black text-zinc-950 shadow-lg shadow-fuchsia-500/20 sm:h-10 sm:w-10 sm:text-xl">
               PR
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight text-white">Pull Request</h1>
-              <p className="text-xs font-medium text-zinc-400">Plan. Lift. Log. Merge progress.</p>
+              <h1 className="text-lg font-black tracking-tight text-white sm:text-xl">Pull Request</h1>
+              <p className="text-[11px] font-medium text-zinc-400 sm:text-xs">Plan. Lift. Log. Merge progress.</p>
             </div>
           </div>
           <div className="hidden rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-400 sm:block">
-            v0.1.2
+            v0.1.3
           </div>
         </div>
-        <nav className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:mt-4">
           {tabs.map(([key, label]) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
               className={classNames(
-                "shrink-0 rounded-full px-4 py-2 text-sm font-bold transition active:scale-[0.98]",
+                "shrink-0 rounded-full px-3 py-2 text-sm font-bold transition active:scale-[0.98] sm:px-4",
                 activeTab === key
                   ? "bg-white text-zinc-950"
                   : "bg-white/[0.05] text-zinc-300 hover:bg-white/[0.09]"
@@ -456,39 +459,42 @@ function Header({ activeTab, setActiveTab }) {
 
 function Shell({ children }) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.22),transparent_35%),radial-gradient(circle_at_top_right,rgba(34,211,238,0.14),transparent_32%),linear-gradient(180deg,#09090b,#18181b)] text-zinc-100">
+    <div
+      className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.22),transparent_35%),radial-gradient(circle_at_top_right,rgba(34,211,238,0.14),transparent_32%),linear-gradient(180deg,#09090b,#18181b)] text-zinc-100"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       {children}
     </div>
   );
 }
 
 function Card({ children, className = "" }) {
-  return <section className={classNames("rounded-[2rem] border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/25 backdrop-blur", className)}>{children}</section>;
+  return <section className={classNames("rounded-[1.75rem] border border-white/10 bg-white/[0.055] p-4 shadow-2xl shadow-black/25 backdrop-blur sm:rounded-[2rem] sm:p-5", className)}>{children}</section>;
 }
 
 function Home({ profile, checkin, setCheckin, setActiveTab, currentWorkout }) {
   return (
-    <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
       <Card className="relative overflow-hidden">
         <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-fuchsia-400/20 blur-3xl" />
         <div className="relative">
           <p className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-fuchsia-300">Today's pull request</p>
-          <h2 className="text-3xl font-black tracking-tight text-white sm:text-4xl">What are we merging into progress today?</h2>
+          <h2 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Ready to get today's workout?</h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-300">
-            Check in, copy the prompt to your coaching chat, import the workout response, then log actuals with gym-friendly controls.
+            If your setup is done, fill in the daily check-in below, copy the prompt to your ChatGPT workout chat, then paste the workout it gives you into the Import tab.
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <button onClick={() => setActiveTab("profile")} className="rounded-3xl bg-white/[0.07] p-4 text-left transition hover:bg-white/[0.1] active:scale-[0.99]">
-              <div className="text-lg font-black text-white">1. Set up once</div>
-              <div className="mt-1 text-sm text-zinc-400">Create your coaching context</div>
+            <button onClick={() => setActiveTab("home")} className="rounded-3xl bg-white/[0.07] p-4 text-left transition hover:bg-white/[0.1] active:scale-[0.99]">
+              <div className="text-lg font-black text-white">1. Check in</div>
+              <div className="mt-1 text-sm text-zinc-400">Tell your coach how today feels</div>
             </button>
             <button onClick={() => setActiveTab("import")} className="rounded-3xl bg-white/[0.07] p-4 text-left transition hover:bg-white/[0.1] active:scale-[0.99]">
               <div className="text-lg font-black text-white">2. Import plan</div>
-              <div className="mt-1 text-sm text-zinc-400">Paste ChatGPT's response</div>
+              <div className="mt-1 text-sm text-zinc-400">Paste the workout response</div>
             </button>
             <button onClick={() => setActiveTab("log")} className="rounded-3xl bg-white/[0.07] p-4 text-left transition hover:bg-white/[0.1] active:scale-[0.99]">
               <div className="text-lg font-black text-white">3. Log actuals</div>
-              <div className="mt-1 text-sm text-zinc-400">Confirm or adjust the plan</div>
+              <div className="mt-1 text-sm text-zinc-400">Confirm or adjust each set</div>
             </button>
           </div>
         </div>
@@ -549,7 +555,7 @@ function Profile({ profile, setProfile }) {
   }
 
   return (
-    <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
       <Card>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -559,7 +565,7 @@ function Profile({ profile, setProfile }) {
               Fill this out, copy the starter prompt, paste it into a new ChatGPT chat, and keep that chat as your ongoing workout coach. Come back here later when your goals, body, schedule, or equipment change.
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row lg:flex-col">
             <PillButton active={mode === "starter"} onClick={() => setMode("starter")}>Starter prompt</PillButton>
             <PillButton active={mode === "update"} onClick={() => setMode("update")}>Update prompt</PillButton>
             <CopyButton text={prompt} label={mode === "starter" ? "Copy setup prompt" : "Copy update prompt"} fallbackTitle="Profile prompt copy" />
@@ -625,7 +631,7 @@ function ImportWorkout({ importText, setImportText, setCurrentWorkout, setActive
   }
 
   return (
-    <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
       <Card>
         <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-cyan-300">Import workout</p>
         <h2 className="text-3xl font-black text-white">Paste ChatGPT's plan.</h2>
@@ -704,15 +710,15 @@ function Stepper({ value, onChange, placeholder, step = 1, kind = "number" }) {
     onChange(smartAdjustValue(value, amount, kind));
   }
   return (
-    <div className="flex items-center gap-2">
-      <button onClick={() => adjust(-step)} className="grid h-12 w-12 place-items-center rounded-2xl bg-white/[0.08] text-xl font-black text-white active:scale-95">-</button>
+    <div className="grid w-full max-w-full grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-2 sm:grid-cols-[48px_minmax(0,1fr)_48px]">
+      <button onClick={() => adjust(-step)} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.08] text-xl font-black text-white active:scale-95 sm:h-12 sm:w-12">-</button>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-12 min-w-0 flex-1 rounded-2xl border border-white/10 bg-zinc-950/70 px-3 text-center text-base font-bold text-white outline-none focus:border-fuchsia-300/70"
+        className="h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-zinc-950/70 px-2 text-center text-base font-bold text-white outline-none focus:border-fuchsia-300/70 sm:h-12 sm:px-3"
       />
-      <button onClick={() => adjust(step)} className="grid h-12 w-12 place-items-center rounded-2xl bg-white/[0.08] text-xl font-black text-white active:scale-95">+</button>
+      <button onClick={() => adjust(step)} className="grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.08] text-xl font-black text-white active:scale-95 sm:h-12 sm:w-12">+</button>
     </div>
   );
 }
@@ -761,7 +767,7 @@ function ExerciseCard({ exercise, onChange }) {
   const allConfirmed = exercise.actualSets.every((set) => set.status === "confirmed");
 
   return (
-    <div className={classNames("rounded-[1.75rem] border p-4 shadow-xl shadow-black/20", allConfirmed ? "border-emerald-300/30 bg-emerald-300/[0.04]" : "border-white/10 bg-zinc-950/55")}>
+    <div className={classNames("w-full max-w-full overflow-hidden rounded-[1.5rem] border p-3 shadow-xl shadow-black/20 sm:rounded-[1.75rem] sm:p-4", allConfirmed ? "border-emerald-300/30 bg-emerald-300/[0.04]" : "border-white/10 bg-zinc-950/55")}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h4 className="text-xl font-black text-white">{exercise.name}</h4>
@@ -779,13 +785,13 @@ function ExerciseCard({ exercise, onChange }) {
         </button>
       </div>
 
-      <button onClick={confirmAll} className="mt-4 w-full rounded-2xl bg-emerald-300 px-4 py-4 text-sm font-black text-zinc-950 shadow-lg shadow-emerald-500/10 transition hover:bg-emerald-200 active:scale-[0.98]">
+      <button onClick={confirmAll} className="mt-4 w-full rounded-2xl bg-emerald-300 px-3 py-4 text-sm font-black text-zinc-950 shadow-lg shadow-emerald-500/10 transition hover:bg-emerald-200 active:scale-[0.98] sm:px-4">
         Yep, did this exercise as planned
       </button>
 
       <div className="mt-4 space-y-3">
         {exercise.actualSets.map((set, index) => (
-          <div key={set.setNumber} className={classNames("rounded-3xl border p-3", set.status === "confirmed" ? "border-emerald-300/20 bg-emerald-300/[0.06]" : set.status === "edited" ? "border-cyan-300/20 bg-cyan-300/[0.05]" : "border-amber-300/15 bg-amber-300/[0.04]")}>
+          <div key={set.setNumber} className={classNames("w-full max-w-full overflow-hidden rounded-3xl border p-3", set.status === "confirmed" ? "border-emerald-300/20 bg-emerald-300/[0.06]" : set.status === "edited" ? "border-cyan-300/20 bg-cyan-300/[0.05]" : "border-amber-300/15 bg-amber-300/[0.04]")}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="font-black text-zinc-200">Set {set.setNumber}</span>
@@ -797,7 +803,7 @@ function ExerciseCard({ exercise, onChange }) {
               </div>
             </div>
             <p className="mb-3 text-xs leading-5 text-zinc-500">Prefilled from the plan. Tap "did it" to confirm, or edit the values to mark this set as changed.</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid w-full max-w-full gap-3 sm:grid-cols-2">
               <div>
                 <div className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-500">Weight</div>
                 <Stepper value={set.weight} onChange={(v) => updateSet(index, "weight", v)} placeholder="lbs" step={5} kind="weight" />
@@ -830,7 +836,7 @@ function ExerciseCard({ exercise, onChange }) {
 function LogWorkout({ currentWorkout, setCurrentWorkout, setActiveTab, saveWorkoutToHistory }) {
   if (!currentWorkout) {
     return (
-      <main className="mx-auto max-w-5xl px-4 py-6">
+      <main className="mx-auto max-w-5xl px-3 py-5 sm:px-4 sm:py-6">
         <Card>
           <h2 className="text-3xl font-black text-white">No workout imported yet.</h2>
           <p className="mt-2 text-zinc-400">Import a structured workout first, then come back here to log actuals.</p>
@@ -843,7 +849,7 @@ function LogWorkout({ currentWorkout, setCurrentWorkout, setActiveTab, saveWorko
     setCurrentWorkout(updateExercise(currentWorkout, exercise.id, () => exercise));
   }
   return (
-    <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -881,7 +887,7 @@ function LogWorkout({ currentWorkout, setCurrentWorkout, setActiveTab, saveWorko
 function ExportUpdate({ currentWorkout, checkin }) {
   const update = useMemo(() => coachUpdate(currentWorkout, checkin), [currentWorkout, checkin]);
   return (
-    <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -905,7 +911,7 @@ function ExportUpdate({ currentWorkout, checkin }) {
 
 function History({ workouts, setCurrentWorkout, setActiveTab }) {
   return (
-    <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+    <main className="mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-6">
       <Card>
         <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-fuchsia-300">Local history</p>
         <h2 className="text-3xl font-black text-white">Your recent merges.</h2>
