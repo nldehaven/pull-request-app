@@ -3,12 +3,13 @@ import React, { useEffect, useMemo, useState } from "react";
 const STORAGE_KEYS = {
   profile: "pullRequest.profile.v012",
   workouts: "pullRequest.workouts.v012",
+  lastCheckin: "pullRequest.lastCheckin.v014",
 };
 
 const defaultProfile = {
   name: "",
   age: "",
-  currentWeight: "",
+  currentWeight: "150",
   goalWeight: "",
   activityLevel: "",
   goals: ["Fat loss", "Strength"],
@@ -22,7 +23,7 @@ const defaultProfile = {
 };
 
 const defaultCheckin = {
-  weight: "",
+  weight: "150",
   sleep: "",
   energy: "",
   soreness: "",
@@ -372,8 +373,8 @@ function workoutExerciseCount(workout) {
 
 function profilePrompt(profile, mode = "starter") {
   const opening = mode === "update"
-    ? "I am updating my training profile for an ongoing Pull Request workout-coaching chat. Please use this updated profile going forward when building and progressing my workouts."
-    : "I am starting a workout-coaching workflow using an app called Pull Request. The app helps me copy your workout plan into cards, log my actual weights/reps, and paste a clean workout summary back to you so you can progress me over time.";
+    ? "I already use Pull Request with this workout-coaching chat. I need to update you on a few things about my body, goals, schedule, equipment, or preferences. Please use this updated profile going forward when building and progressing my workouts."
+    : "I am new to Pull Request and I want to set up a new workout-coaching chat. Pull Request is the app I will use to copy your workout plan into gym-friendly cards, log my actual weights/reps, and paste a clean workout summary back to you so you can progress me over time.";
 
   return `${opening}\n\nI want you to act as my adaptive strength-training coach. Build workouts for me based on my goals, current ability, limitations, actual performance, and daily check-ins. Please keep the coaching conversational, but format the actual workout plan exactly like this so Pull Request can import it cleanly:\n\nWORKOUT_TITLE: [title]\nTIME_TARGET: [time]\n\nSECTION: [Warm-up, Superset A, Strength Block B, Big Superset C, Finisher, Cooldown, Optional Cooldown, etc.]\nSECTION_TYPE: [warmup, superset, big superset, giant set, block, finisher, cooldown, optional cooldown]\nEXERCISE: [exercise name]\nSETS: [number]\nREPS: [target reps or duration]\nSUGGESTED_WEIGHT: [suggested weight or bodyweight]\nNOTES: [short coaching cue]\n\nImportant: repeat the EXERCISE/SETS/REPS/SUGGESTED_WEIGHT/NOTES fields for every exercise. Use clear section names for warm-ups, supersets, regular blocks, big supersets, finishers, cooldowns, and optional cooldowns.\n\nMy profile:\nName: ${profile.name || "not entered"}\nAge: ${profile.age || "not entered"}\nCurrent weight: ${profile.currentWeight || "not entered"}\nGoal weight: ${profile.goalWeight || "not entered"}\nActivity level: ${profile.activityLevel || "not entered"}\nGoals: ${profile.goals.join(", ")}\nTraining pace: ${profile.trainingPace || "not entered"}\nUsual session length: ${profile.sessionLength || "not entered"}\nLimitations/injuries: ${profile.limitations || "not entered"}\nGym access: ${profile.gymAccess || "not entered"}\nFavorite equipment/styles: ${profile.favorites || "not entered"}\nAvoid: ${profile.avoid || "not entered"}\nCoaching style: ${profile.coachingStyle || "not entered"}\n\nPlease progress me based on my actual results over time, not generic programming. If something causes pain or looks risky based on my check-in, adjust the plan. When I paste completed workout actuals back to you, use those actuals to decide what should increase, stay the same, or be modified next time.`;
 }
@@ -383,8 +384,9 @@ function checkinPrompt(profile, checkin) {
 }
 
 function describeSetStatus(set) {
-  if (set.status === "confirmed") return "confirmed as planned";
-  if (set.status === "edited") return "edited by user";
+  if (set.status === "confirmed" && set.edited) return "done after edit";
+  if (set.status === "confirmed") return "done as planned/current";
+  if (set.status === "edited") return "edited but not yet marked done";
   return "planned value not yet confirmed";
 }
 
@@ -404,12 +406,11 @@ function coachUpdate(workout, checkin) {
     })
     .join("\n\n");
 
-  return `WORKOUT COMPLETED\n\nWorkout: ${workout.title}\nDate: ${new Date(workout.date).toLocaleDateString()}\nTime target: ${workout.timeTarget || "not listed"}\n\nToday's context:\nWeight: ${checkin.weight || "not entered"}\nSleep: ${checkin.sleep || "not entered"}\nEnergy: ${checkin.energy || "not entered"}\nSoreness/pain: ${checkin.soreness || "not entered"}\nConstraints: ${checkin.constraints || "none entered"}\nNotes: ${checkin.notes || "none entered"}\n\nExercise results:\n\n${sections}\n\nProgression request:\nPlease use these actuals to decide what should increase, stay the same, or be modified next time. Treat confirmed-as-planned sets as completed exactly as prescribed. Treat edited sets as the true actuals. If a set is still marked as planned value not yet confirmed, ask me for clarification or use caution before progressing that exercise. Keep the workout flexible and adjust for any pain flags or constraints.`;
+  return `WORKOUT COMPLETED\n\nWorkout: ${workout.title}\nDate: ${new Date(workout.date).toLocaleDateString()}\nTime target: ${workout.timeTarget || "not listed"}\n\nToday's context:\nWeight: ${checkin.weight || "not entered"}\nSleep: ${checkin.sleep || "not entered"}\nEnergy: ${checkin.energy || "not entered"}\nSoreness/pain: ${checkin.soreness || "not entered"}\nConstraints: ${checkin.constraints || "none entered"}\nNotes: ${checkin.notes || "none entered"}\n\nExercise results:\n\n${sections}\n\nProgression request:\nPlease use these actuals to decide what should increase, stay the same, or be modified next time. Treat done-as-planned/current sets as completed, and treat done-after-edit sets as the true actuals. If a set is still marked as planned value not yet confirmed or edited but not yet marked done, ask me for clarification or use caution before progressing that exercise. Keep the workout flexible and adjust for any pain flags or constraints.`;
 }
 
 function Header({ activeTab, setActiveTab }) {
   const tabs = [
-    ["profile", "Setup"],
     ["home", "Today"],
     ["import", "Import"],
     ["log", "Log"],
@@ -428,13 +429,22 @@ function Header({ activeTab, setActiveTab }) {
               PR
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tight text-white sm:text-xl">Pull Request</h1>
+              <h1 className="text-lg font-black tracking-tight text-white sm:text-xl">Pull Request Fitness App</h1>
               <p className="text-[11px] font-medium text-zinc-400 sm:text-xs">Plan. Lift. Log. Merge progress.</p>
             </div>
           </div>
-          <div className="hidden rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-400 sm:block">
-            v0.1.3
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab("profile")}
+            className={classNames(
+              "rounded-full px-4 py-2 text-sm font-black transition active:scale-[0.98]",
+              activeTab === "profile"
+                ? "bg-white text-zinc-950"
+                : "border border-white/10 bg-white/[0.06] text-zinc-200 hover:bg-white/[0.1]"
+            )}
+          >
+            Setup
+          </button>
         </div>
         <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:mt-4">
           {tabs.map(([key, label]) => (
@@ -481,7 +491,7 @@ function Home({ profile, checkin, setCheckin, setActiveTab, currentWorkout }) {
           <p className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-fuchsia-300">Today's pull request</p>
           <h2 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Ready to get today's workout?</h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-zinc-300">
-            If your setup is done, fill in the daily check-in below, copy the prompt to your ChatGPT workout chat, then paste the workout it gives you into the Import tab.
+            If your setup is done, this is where you start each day. Fill in the daily check-in, copy the prompt into your ChatGPT workout chat, then bring the workout back to the Import tab.
           </p>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <button onClick={() => setActiveTab("home")} className="rounded-3xl bg-white/[0.07] p-4 text-left transition hover:bg-white/[0.1] active:scale-[0.99]">
@@ -504,23 +514,53 @@ function Home({ profile, checkin, setCheckin, setActiveTab, currentWorkout }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="text-xl font-black text-white">Daily check-in</h3>
-            <p className="mt-1 text-sm leading-6 text-zinc-400">Use this when you are already set up in a coaching chat. It tells ChatGPT what Pull Request needs back.</p>
+            <p className="mt-1 text-sm leading-6 text-zinc-400">Use this after setup. It gives your ChatGPT coach today's quick body report so it can build the right workout.</p>
           </div>
           <CopyButton text={checkinPrompt(profile, checkin)} label="Copy prompt" copiedLabel="Copied" fallbackTitle="Copy your daily workout prompt" />
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <Field label="Weight today" value={checkin.weight} onChange={(v) => setCheckin({ ...checkin, weight: v })} placeholder="190.1" />
+          <Field label="Weight today" value={checkin.weight} onChange={(v) => setCheckin({ ...checkin, weight: v })} placeholder="150" />
           <Field label="Available time" value={checkin.timeAvailable} onChange={(v) => setCheckin({ ...checkin, timeAvailable: v })} placeholder="45 minutes" />
-          <Field label="Sleep" value={checkin.sleep} onChange={(v) => setCheckin({ ...checkin, sleep: v })} placeholder="Good / okay / rough" />
-          <Field label="Energy" value={checkin.energy} onChange={(v) => setCheckin({ ...checkin, energy: v })} placeholder="Strong / medium / low" />
+          <div>
+            <span className="mb-2 block text-sm font-medium text-zinc-300">Sleep</span>
+            <div className="flex flex-wrap gap-2">
+              {["Great", "Good", "Okay", "Rough"].map((option) => (
+                <PillButton key={option} active={checkin.sleep === option} onClick={() => setCheckin({ ...checkin, sleep: option })}>{option}</PillButton>
+              ))}
+            </div>
+          </div>
+          <div>
+            <span className="mb-2 block text-sm font-medium text-zinc-300">Energy</span>
+            <div className="flex flex-wrap gap-2">
+              {["Strong", "Good", "Medium", "Low"].map((option) => (
+                <PillButton key={option} active={checkin.energy === option} onClick={() => setCheckin({ ...checkin, energy: option })}>{option}</PillButton>
+              ))}
+            </div>
+          </div>
           <div className="sm:col-span-2">
-            <Field label="Soreness or pain" value={checkin.soreness} onChange={(v) => setCheckin({ ...checkin, soreness: v })} placeholder="No foot issue, mild hamstring tightness..." textarea />
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="block text-sm font-medium text-zinc-300">Soreness or pain</span>
+              <button
+                type="button"
+                onClick={() => setCheckin({ ...checkin, soreness: "None" })}
+                className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-xs font-black text-emerald-200 transition active:scale-[0.98]"
+              >
+                none
+              </button>
+            </div>
+            <textarea
+              value={checkin.soreness}
+              onChange={(e) => setCheckin({ ...checkin, soreness: e.target.value })}
+              placeholder="Anything tight, sore, cranky, or worth working around?"
+              rows={4}
+              className="w-full rounded-2xl border border-white/10 bg-zinc-950/70 px-4 py-3 text-base text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-fuchsia-400/70 focus:ring-4 focus:ring-fuchsia-500/10"
+            />
           </div>
           <div className="sm:col-span-2">
             <Field label="Today's constraints" value={checkin.constraints} onChange={(v) => setCheckin({ ...checkin, constraints: v })} placeholder="No Smith machine today, short on time, lower body only..." textarea />
           </div>
           <div className="sm:col-span-2">
-            <Field label="Other notes" value={checkin.notes} onChange={(v) => setCheckin({ ...checkin, notes: v })} placeholder="Softball went great, feeling confident, want something efficient..." textarea />
+            <Field label="Other notes" value={checkin.notes} onChange={(v) => setCheckin({ ...checkin, notes: v })} placeholder="Anything your coach should know today? Time crunch, mood, equipment preference, workout style..." textarea />
           </div>
         </div>
       </Card>
@@ -559,16 +599,16 @@ function Profile({ profile, setProfile }) {
       <Card>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-fuchsia-300">First-time setup</p>
-            <h2 className="text-3xl font-black text-white">Create your coaching context once.</h2>
+            <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-fuchsia-300">Setup</p>
+            <h2 className="text-3xl font-black text-white">Tell your ChatGPT coach how to train you.</h2>
             <p className="mt-2 max-w-2xl text-zinc-400">
-              Fill this out, copy the starter prompt, paste it into a new ChatGPT chat, and keep that chat as your ongoing workout coach. Come back here later when your goals, body, schedule, or equipment change.
+              New here? Fill this out, copy the setup prompt, paste it into a new ChatGPT chat, and keep using that chat for your workouts. Already set up? Use the update option when your goals, body, schedule, or equipment change.
             </p>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row lg:flex-col">
-            <PillButton active={mode === "starter"} onClick={() => setMode("starter")}>Starter prompt</PillButton>
-            <PillButton active={mode === "update"} onClick={() => setMode("update")}>Update prompt</PillButton>
-            <CopyButton text={prompt} label={mode === "starter" ? "Copy setup prompt" : "Copy update prompt"} fallbackTitle="Profile prompt copy" />
+            <PillButton active={mode === "starter"} onClick={() => setMode("starter")}>I'm new here</PillButton>
+            <PillButton active={mode === "update"} onClick={() => setMode("update")}>I need to update my coach</PillButton>
+            <CopyButton text={prompt} label={mode === "starter" ? "Copy setup prompt for ChatGPT" : "Copy update for ChatGPT"} fallbackTitle="Profile prompt copy" />
           </div>
         </div>
       </Card>
@@ -576,12 +616,12 @@ function Profile({ profile, setProfile }) {
       <Card>
         <div className="mb-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/8 p-4">
           <h3 className="font-black text-cyan-200">How this works</h3>
-          <p className="mt-1 text-sm leading-6 text-zinc-300">This prompt tells ChatGPT that Pull Request is the logging layer. ChatGPT still does the flexible coaching; this app makes the plan and actuals easier to move back and forth.</p>
+          <p className="mt-1 text-sm leading-6 text-zinc-300">Pull Request does not replace your ChatGPT coach. It helps you move cleanly between chat and the gym: copy a prompt to ChatGPT, paste the workout here, log what you actually did, then send the results back so your next workout can be smarter.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" value={profile.name} onChange={(v) => setProfile({ ...profile, name: v })} placeholder="Your name" />
           <Field label="Age" value={profile.age} onChange={(v) => setProfile({ ...profile, age: v })} placeholder="45" />
-          <Field label="Current weight" value={profile.currentWeight} onChange={(v) => setProfile({ ...profile, currentWeight: v })} placeholder="190" />
+          <Field label="Current weight" value={profile.currentWeight} onChange={(v) => setProfile({ ...profile, currentWeight: v })} placeholder="150" />
           <Field label="Goal weight" value={profile.goalWeight} onChange={(v) => setProfile({ ...profile, goalWeight: v })} placeholder="150" />
           <div className="sm:col-span-2">
             <span className="mb-3 block text-sm font-medium text-zinc-300">Goals</span>
@@ -735,32 +775,45 @@ function SetStatusBadge({ status }) {
 
 function ExerciseCard({ exercise, onChange }) {
   function updateSet(index, field, value) {
-    const actualSets = exercise.actualSets.map((set, i) => i === index ? { ...set, [field]: value, status: "edited" } : set);
+    const actualSets = exercise.actualSets.map((set, i) => i === index ? { ...set, [field]: value, status: "edited", edited: true } : set);
     onChange({ ...exercise, actualSets });
   }
 
   function confirmSet(index) {
     const actualSets = exercise.actualSets.map((set, i) =>
       i === index
-        ? { ...set, reps: repsForConfirmedSet(set.plannedReps || set.reps), status: "confirmed" }
+        ? { ...set, status: "confirmed", edited: set.edited || set.status === "edited" }
         : set
     );
     onChange({ ...exercise, actualSets });
   }
 
   function confirmAll() {
-    const actualSets = exercise.actualSets.map((set) => ({
-      ...set,
-      reps: repsForConfirmedSet(set.plannedReps || set.reps),
-      status: "confirmed",
-    }));
-    onChange({ ...exercise, actualSets, difficulty: exercise.difficulty || "Just right" });
+    const allConfirmedNow = exercise.actualSets.every((set) => set.status === "confirmed");
+    const actualSets = exercise.actualSets.map((set) =>
+      allConfirmedNow
+        ? {
+            ...set,
+            weight: set.plannedWeight || set.weight,
+            reps: set.plannedReps || set.reps,
+            status: "planned",
+            edited: false,
+          }
+        : {
+            ...set,
+            weight: set.plannedWeight || set.weight,
+            reps: repsForConfirmedSet(set.plannedReps || set.reps),
+            status: "confirmed",
+            edited: false,
+          }
+    );
+    onChange({ ...exercise, actualSets, difficulty: allConfirmedNow ? exercise.difficulty : exercise.difficulty || "Just right" });
   }
 
   function sameAsPrevious(index) {
     if (index <= 0) return;
     const prev = exercise.actualSets[index - 1];
-    const actualSets = exercise.actualSets.map((set, i) => i === index ? { ...set, weight: prev.weight, reps: prev.reps, status: "edited" } : set);
+    const actualSets = exercise.actualSets.map((set, i) => i === index ? { ...set, weight: prev.weight, reps: prev.reps, status: "edited", edited: true } : set);
     onChange({ ...exercise, actualSets });
   }
 
@@ -785,8 +838,8 @@ function ExerciseCard({ exercise, onChange }) {
         </button>
       </div>
 
-      <button onClick={confirmAll} className="mt-4 w-full rounded-2xl bg-emerald-300 px-3 py-4 text-sm font-black text-zinc-950 shadow-lg shadow-emerald-500/10 transition hover:bg-emerald-200 active:scale-[0.98] sm:px-4">
-        Yep, did this exercise as planned
+      <button onClick={confirmAll} className={classNames("mt-4 w-full rounded-2xl px-3 py-3 text-sm font-black shadow-lg transition active:scale-[0.98] sm:px-4", allConfirmed ? "bg-white/[0.08] text-zinc-200 hover:bg-white/[0.12]" : "bg-emerald-300 text-zinc-950 shadow-emerald-500/10 hover:bg-emerald-200")}>
+        {allConfirmed ? "Undo planned confirmation" : "Yep, did this exercise as planned"}
       </button>
 
       <div className="mt-4 space-y-3">
@@ -802,7 +855,7 @@ function ExerciseCard({ exercise, onChange }) {
                 <button onClick={() => confirmSet(index)} className="rounded-full bg-emerald-300/15 px-3 py-2 text-xs font-black text-emerald-200">did it</button>
               </div>
             </div>
-            <p className="mb-3 text-xs leading-5 text-zinc-500">Prefilled from the plan. Tap "did it" to confirm, or edit the values to mark this set as changed.</p>
+            <p className="mb-3 text-xs leading-5 text-zinc-500">Prefilled from the plan. Edit if needed, then tap "did it" to lock in this set.</p>
             <div className="grid w-full max-w-full gap-3 sm:grid-cols-2">
               <div>
                 <div className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-500">Weight</div>
@@ -941,13 +994,14 @@ function History({ workouts, setCurrentWorkout, setActiveTab }) {
 export default function App() {
   const [activeTab, setActiveTab] = useState("profile");
   const [profile, setProfile] = useState(() => loadJson(STORAGE_KEYS.profile, defaultProfile));
-  const [checkin, setCheckin] = useState(defaultCheckin);
+  const [checkin, setCheckin] = useState(() => loadJson(STORAGE_KEYS.lastCheckin, defaultCheckin));
   const [importText, setImportText] = useState(sampleWorkoutText);
   const [currentWorkout, setCurrentWorkout] = useState(null);
   const [workouts, setWorkouts] = useState(() => loadJson(STORAGE_KEYS.workouts, []));
 
   useEffect(() => saveJson(STORAGE_KEYS.profile, profile), [profile]);
   useEffect(() => saveJson(STORAGE_KEYS.workouts, workouts), [workouts]);
+  useEffect(() => saveJson(STORAGE_KEYS.lastCheckin, checkin), [checkin]);
 
   function saveWorkoutToHistory(workout) {
     setWorkouts((existing) => [workout, ...existing.filter((item) => item.id !== workout.id)].slice(0, 50));
